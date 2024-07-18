@@ -1,6 +1,7 @@
 import asyncio
 import json
-from concurrent.futures import TimeoutError as ConnectionTimeoutError
+from concurrent.futures import TimeoutError as ConnectionTimeoutError 
+import logging 
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
@@ -9,6 +10,8 @@ from retell import Retell
 from src.definitions.credentials import Credentials
 from src.services.llm import LLMClient
 from src.utils.custom_types import ConfigResponse, ResponseRequiredRequest
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 RETELL = Retell(api_key=Credentials.retell_api_key())
@@ -26,17 +29,17 @@ async def handle_webhook(request):
         event = post_data['event']
         call_id = post_data['data']['call_id']
         if not valid_signature:
-            print(f"Received Unauthorized {event} {call_id}")
+            logger.info(f"Received Unauthorized {event} {call_id}")
         if event == "call_started":
-            print(f"Call started event {call_id}")
+            logger.info(f"Call started event {call_id}")
         elif event == "call_ended":
-            print(f"Call ended event {call_id}")
+            logger.info(f"Call ended event {call_id}")
         elif event == "call_analyzed":
-            print(f"Call analyzed event {call_id}")
+            logger.info(f"Call analyzed event {call_id}")
         else:
-            print(f"Unknown event {call_id}")
+            logger.info(f"Unknown event {call_id}")
     except Exception as e:
-        print(f"Error in webhook: {e}")
+        logger.error(f"Error in webhook: {e}")
         return JSONResponse(status_code=500, content={"messsage": "Internal Server Error"})
 
 
@@ -69,7 +72,7 @@ async def websocket_handler(websocket: WebSocket, call_id: str):
             # Not all of them need to be handled, only response_required and reminder_required.
             interaction_type = request_json['interaction_type']
             if interaction_type == "call_details":
-                print(json.dumps(request_json, indent=2))
+                logger.info(json.dumps(request_json, indent=2))
                 return
             if interaction_type == "ping_pong":
                 await websocket.send_json(
@@ -88,7 +91,7 @@ async def websocket_handler(websocket: WebSocket, call_id: str):
                     response_id=response_id,
                     transcript=request_json['transcript']
                 )
-                print(f"""Received interaction_type={request_json['interaction_type']}, response_id={response_id}, 
+                logger.info(f"""Received interaction_type={request_json['interaction_type']}, response_id={response_id}, 
                 last_transcript={request_json['transcript'][-1]['content']}""")
 
                 async for event in llm_client.draft_response(request):
@@ -100,11 +103,10 @@ async def websocket_handler(websocket: WebSocket, call_id: str):
             asyncio.create_task(handle_message(data))
 
     except WebSocketDisconnect:
-        print(f"LLM WebSocket disconnected for {call_id}")
+        logger.error(f"LLM WebSocket disconnected for {call_id}")
     except ConnectionTimeoutError as e:
-        print(f"Connection timeout error for {call_id}")
+        logger.error(f"Connection timeout error for {call_id}")
     except Exception as e:
-        print(f"Error in LLM WebSocket: {e} for {call_id}")
+        logger.error(f"Error in LLM WebSocket: {e} for {call_id}")
     finally:
-        print(f"LLM WebSocket connection closed for {call_id}"
-              )
+        logger.info(f"LLM WebSocket connection closed for {call_id}")
