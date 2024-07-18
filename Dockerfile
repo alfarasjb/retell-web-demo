@@ -12,4 +12,8 @@ FROM python:3.12.3-slim-bookworm
 WORKDIR /app
 COPY --from=builder /app/.venv .venv/
 COPY . .
-CMD ["uvicorn", "main:app", "--reload", "--port=8080"]
+
+EXPOSE 8080
+ENV PORT=8080
+ENV HOST=0.0.0.0
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
